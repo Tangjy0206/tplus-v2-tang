@@ -1,13 +1,12 @@
 import requests
 import pandas as pd
+from cache import load_cache, save_cache
 
 class DataEnginePro:
 
     def format_symbol(self, symbol: str):
-
         symbol = symbol.strip()
 
-        # 自动补交易所（关键修复）
         if symbol.startswith("6"):
             return symbol + ".SH"
         else:
@@ -15,6 +14,12 @@ class DataEnginePro:
 
     def get_daily(self, symbol):
 
+        # 🟢 1. 先读缓存（关键）
+        cache_df = load_cache(symbol)
+        if cache_df is not None and len(cache_df) > 10:
+            return cache_df
+
+        # 🟡 2. 请求网络
         symbol = self.format_symbol(symbol)
 
         url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={symbol},day,,,320,qfq"
@@ -23,30 +28,26 @@ class DataEnginePro:
             res = requests.get(url, timeout=8)
             data = res.json()
 
-            # 🧠 防空结构（关键）
-            if not data or "data" not in data:
-                return None
+            klines = data.get("data", {}).get(symbol, {}).get("day", [])
 
-            stock_data = data["data"].get(symbol, {})
-            klines = stock_data.get("day", [])
-
-            # 🧨 核心防崩点
-            if len(klines) == 0:
+            if not klines:
                 return None
 
             df = pd.DataFrame(klines, columns=[
                 "time", "open", "close", "high", "low", "volume"
             ])
 
-            # 强制类型转换（避免字符串）
-            df["close"] = pd.to_numeric(df["close"], errors="coerce")
-            df["high"] = pd.to_numeric(df["high"], errors="coerce")
-            df["low"] = pd.to_numeric(df["low"], errors="coerce")
+            df["close"] = pd.to_numeric(df["close"])
+            df["high"] = pd.to_numeric(df["high"])
+            df["low"] = pd.to_numeric(df["low"])
 
-            df = df.dropna()
+            # 🟢 3. 写入缓存（关键）
+            save_cache(symbol, df)
 
             return df.tail(60)
 
         except Exception as e:
-            print("DATA ERROR:", e)
-            return None
+            print("network error:", e)
+
+            # 🔴 4. 兜底缓存
+            return load_cache(symbol)
