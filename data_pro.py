@@ -7,7 +7,7 @@ class DataEnginePro:
 
         symbol = symbol.strip()
 
-        # 自动补交易所后缀（关键修复）
+        # 自动补交易所（关键修复）
         if symbol.startswith("6"):
             return symbol + ".SH"
         else:
@@ -23,22 +23,30 @@ class DataEnginePro:
             res = requests.get(url, timeout=8)
             data = res.json()
 
-            # 安全取值（关键）
-            klines = data.get("data", {}).get(symbol, {}).get("day", [])
+            # 🧠 防空结构（关键）
+            if not data or "data" not in data:
+                return None
 
-            if not klines:
+            stock_data = data["data"].get(symbol, {})
+            klines = stock_data.get("day", [])
+
+            # 🧨 核心防崩点
+            if len(klines) == 0:
                 return None
 
             df = pd.DataFrame(klines, columns=[
                 "time", "open", "close", "high", "low", "volume"
             ])
 
-            df["close"] = df["close"].astype(float)
-            df["high"] = df["high"].astype(float)
-            df["low"] = df["low"].astype(float)
+            # 强制类型转换（避免字符串）
+            df["close"] = pd.to_numeric(df["close"], errors="coerce")
+            df["high"] = pd.to_numeric(df["high"], errors="coerce")
+            df["low"] = pd.to_numeric(df["low"], errors="coerce")
+
+            df = df.dropna()
 
             return df.tail(60)
 
         except Exception as e:
-            print("data error:", e)
+            print("DATA ERROR:", e)
             return None
