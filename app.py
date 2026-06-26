@@ -28,3 +28,8 @@ if symbol:
     col1, col2 = st.columns(2)
     col1.metric("价格", price)
     col2.metric("信号", signal)
+df = engine.get_daily(symbol)
+
+if df is None or len(df) == 0:
+    st.error("数据不可用（缓存和网络都失败）")
+    st.stop()
